@@ -38,6 +38,7 @@
     "@codingame/monaco-vscode-java-default-extension": "8.0.4",
     "@codingame/monaco-vscode-python-default-extension": "8.0.4",
     "@codingame/monaco-vscode-r-default-extension": "8.0.4",
+    "@ctrl/tinycolor": "^4.2.0",
     "@loaders.gl/core": "3.4.2",
     "@luma.gl/core": "8.5.20",
     "@ngneat/until-destroy": "8.1.4",

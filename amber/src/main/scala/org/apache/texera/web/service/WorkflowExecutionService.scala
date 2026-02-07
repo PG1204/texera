@@ -170,10 +170,18 @@ class WorkflowExecutionService(
     if (client != null) {
       // runtime created
       client.shutdown()
-      executionRuntimeService.unsubscribeAll()
-      executionConsoleService.unsubscribeAll()
-      executionStatsService.unsubscribeAll()
-      executionReconfigurationService.unsubscribeAll()
+      if (executionRuntimeService != null) {
+        executionRuntimeService.unsubscribeAll()
+      }
+      if (executionConsoleService != null) {
+        executionConsoleService.unsubscribeAll()
+      }
+      if (executionStatsService != null) {
+        executionStatsService.unsubscribeAll()
+      }
+      if (executionReconfigurationService != null) {
+        executionReconfigurationService.unsubscribeAll()
+      }
     }
 
   }

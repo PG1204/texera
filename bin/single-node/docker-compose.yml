@@ -23,7 +23,7 @@ services:
     image: minio/minio:RELEASE.2025-02-28T09-55-16Z
     container_name: texera-minio
     ports:
-      - "9000:9000"
+      - "9002:9000"
     env_file:
       - .env
     volumes:
@@ -36,6 +36,8 @@ services:
     image: groonga/pgroonga:4.0.1-debian-15
     container_name: texera-postgres
     restart: always
+    ports:
+      - "5433:5432"
     env_file:
       - .env
     healthcheck:
@@ -53,6 +55,8 @@ services:
     image: treeverse/lakefs:1.51
     container_name: texera-lakefs
     restart: always
+    ports:
+      - "8000:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -62,7 +66,7 @@ services:
       - .env
     environment:
       # This port also need to be changed if the port of MinIO service is changed
-      - LAKEFS_BLOCKSTORE_S3_PRE_SIGNED_ENDPOINT=${TEXERA_HOST}:9000
+      - LAKEFS_BLOCKSTORE_S3_PRE_SIGNED_ENDPOINT=${TEXERA_HOST}:9002
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
