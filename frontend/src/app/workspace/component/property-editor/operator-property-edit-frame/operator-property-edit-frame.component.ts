@@ -80,6 +80,10 @@ import {
   OperatorDelta,
   statsToComparable,
 } from "../../../service/profiler/profiler-delta";
+import { WorkflowPveService } from "../../../service/virtual-environment/virtual-environment.service";
+import { ComputingUnitStatusService } from "../../../../common/service/computing-unit/computing-unit-status/computing-unit-status.service";
+import { of } from "rxjs";
+import { map, switchMap, take } from "rxjs/operators";
 
 Quill.register("modules/cursors", QuillCursors);
 
@@ -198,8 +202,32 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
     private workflowVersionService: WorkflowVersionService,
     private workflowStatusSerivce: WorkflowStatusService,
     private config: GuiConfigService,
-    private profilerService: ProfilerService
+    private profilerService: ProfilerService,
+    private workflowPveService: WorkflowPveService,
+    private computingUnitStatusService: ComputingUnitStatusService
   ) {}
+
+  private patchPythonUdfEnvironmentSchema(schema: CustomJSONSchema7, environments: string[]): CustomJSONSchema7 {
+    const patchedSchema = cloneDeep(schema);
+
+    if (patchedSchema.properties && typeof patchedSchema.properties !== "boolean") {
+      const envProperty = patchedSchema.properties["envName"] as CustomJSONSchema7;
+      envProperty.enum = environments;
+    }
+
+    return patchedSchema;
+  }
+
+  private hideEnvNameWhenDefaultEnvChecked(): void {
+    const envField = this.formlyFields?.[0]?.fieldGroup?.find(f => f.key === "envName");
+    if (envField) {
+      envField.expressions = {
+        ...envField.expressions,
+        hide: "!!field.parent.model.defaultEnv",
+        "props.required": "!field.parent.model.defaultEnv",
+      };
+    }
+  }
 
   ngOnChanges(changes: SimpleChanges): void {
     this.currentOperatorId = changes.currentOperatorId?.currentValue;
@@ -406,6 +434,49 @@ export class OperatorPropertyEditFrameComponent implements OnInit, OnChanges, On
      * Prevent the form directly changes the value in the texera graph without going through workflow action service.
      */
     this.formData = cloneDeep(operator.operatorProperties);
+
+    const isPythonUdf =
+      this.currentOperatorSchema.operatorType === "PythonUDFV2" ||
+      this.currentOperatorSchema.operatorType === "DualInputPortsPythonUDFV2" ||
+      this.currentOperatorSchema.operatorType === "PythonUDFSourceV2";
+    if (isPythonUdf && this.formData.defaultEnv === undefined) {
+      this.formData.defaultEnv = true;
+    }
+
+    const baseSchema = cloneDeep(this.currentOperatorSchema.jsonSchema);
+
+    if (isPythonUdf) {
+      this.computingUnitStatusService
+        .getSelectedComputingUnit()
+        .pipe(
+          take(1),
+          switchMap(unit => {
+            const cuid = unit?.computingUnit?.cuid;
+            return cuid !== undefined
+              ? this.workflowPveService.fetchPVEs(cuid).pipe(map(pves => pves.map(p => p.pveName)))
+              : of<string[]>([]);
+          }),
+          untilDestroyed(this)
+        )
+        .subscribe({
+          next: (environments: string[]) => {
+            const patchedSchema = this.patchPythonUdfEnvironmentSchema(baseSchema, environments);
+            this.setFormlyFormBinding(patchedSchema);
+            this.hideEnvNameWhenDefaultEnvChecked();
+          },
+          error: (err: unknown) => {
+            console.error("Failed to load Python virtual environments:", err);
+            this.notificationService.error(
+              `Could not load Python virtual environments: ${err instanceof Error ? err.message : String(err)}`
+            );
+            const patchedSchema = this.patchPythonUdfEnvironmentSchema(baseSchema, []);
+            this.setFormlyFormBinding(patchedSchema);
+            this.hideEnvNameWhenDefaultEnvChecked();
+          },
+        });
+    } else {
+      this.setFormlyFormBinding(baseSchema);
+    }
 
     // use ajv to initialize the default value to data according to schema, see https://ajv.js.org/#assigning-defaults
     // WorkflowUtil service also makes sure that the default values are filled in when operator is added from the UI
